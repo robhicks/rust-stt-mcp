@@ -2,14 +2,17 @@ use anyhow::{Context, Result};
 use std::path::Path;
 use whisper_rs::{FullParams, SamplingStrategy, WhisperContext, WhisperContextParameters};
 
-/// Transcribe 16kHz mono f32 audio samples using a local Whisper model.
-pub fn transcribe(model_path: &Path, audio: &[f32], language: &str) -> Result<String> {
-    let ctx = WhisperContext::new_with_params(
+/// Create a WhisperContext from a model file, reusable across multiple transcriptions.
+pub fn create_context(model_path: &Path) -> Result<WhisperContext> {
+    WhisperContext::new_with_params(
         model_path.to_str().unwrap_or_default(),
         WhisperContextParameters::default(),
     )
-    .context("failed to load whisper model")?;
+    .context("failed to load whisper model")
+}
 
+/// Transcribe audio using an existing WhisperContext.
+pub fn transcribe_with_context(ctx: &WhisperContext, audio: &[f32], language: &str) -> Result<String> {
     let mut state = ctx.create_state().context("failed to create whisper state")?;
 
     let mut params = FullParams::new(SamplingStrategy::Greedy { best_of: 1 });
@@ -37,4 +40,10 @@ pub fn transcribe(model_path: &Path, audio: &[f32], language: &str) -> Result<St
     }
 
     Ok(text.trim().to_string())
+}
+
+/// Convenience wrapper: loads model and transcribes in one call.
+pub fn transcribe(model_path: &Path, audio: &[f32], language: &str) -> Result<String> {
+    let ctx = create_context(model_path)?;
+    transcribe_with_context(&ctx, audio, language)
 }
