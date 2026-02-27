@@ -72,18 +72,27 @@ You should see a JSON response containing `"serverInfo"` and `"tools"` in the ca
 
 ### Test recording and transcription
 
-Send an `initialize`, then call the `record_and_transcribe` tool. Speak into your microphone during the recording window:
+The MCP protocol requires a full `initialize` / `notifications/initialized` handshake before tool calls. A simple pipe closes stdin too early, so we use a FIFO to keep the connection open. Speak into your microphone during the recording window:
 
 ```bash
-{
-  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}'
-  sleep 0.5
-  echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"record_and_transcribe","arguments":{"duration_secs":3,"language":"en"}}}'
-  sleep 5
-} | target/release/stt-mcp 2>/dev/null
+FIFO=$(mktemp -u) && mkfifo "$FIFO"
+target/release/stt-mcp < "$FIFO" 2>/dev/null &
+SERVER_PID=$!
+exec 3>"$FIFO"
+
+echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"0.1"}}}' >&3
+sleep 1
+echo '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >&3
+sleep 1
+echo '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"record_and_transcribe","arguments":{"duration_secs":3,"language":"en"}}}' >&3
+sleep 8
+
+exec 3>&-
+wait $SERVER_PID 2>/dev/null
+rm -f "$FIFO"
 ```
 
-The second JSON response will contain the transcribed text from your microphone.
+The server writes JSON-RPC responses to stdout. The second response will contain the transcribed text from your microphone.
 
 ### Test from Claude Code
 
