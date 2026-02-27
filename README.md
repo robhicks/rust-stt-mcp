@@ -38,23 +38,23 @@ The binary is written to `target/release/stt-mcp`.
 
 ## Configure Claude Code
 
-Add the server to `~/.claude/settings.json`:
+Add the server using the Claude CLI:
 
-```json
-{
-  "mcpServers": {
-    "stt": {
-      "command": "/home/YOU/dev/rust-stt-mcp/target/release/stt-mcp",
-      "args": [],
-      "env": {
-        "WHISPER_MODEL_PATH": "/home/YOU/.local/share/stt-mcp/ggml-base.bin"
-      }
-    }
-  }
-}
+```bash
+claude mcp add stt -- /home/YOU/dev/rust-stt-mcp/target/release/stt-mcp
 ```
 
 Replace `/home/YOU` with your actual home directory.
+
+To pass a custom model path, use the `-e` flag:
+
+```bash
+claude mcp add stt \
+  -e WHISPER_MODEL_PATH=/home/YOU/.local/share/stt-mcp/ggml-base.bin \
+  -- /home/YOU/dev/rust-stt-mcp/target/release/stt-mcp
+```
+
+By default this adds the server to your user-level settings (`~/.claude/settings.json`). Use `-s project` to scope it to the current project instead.
 
 ## Test it
 
