@@ -12,11 +12,14 @@ struct StreamHandle {
     channels: usize,
 }
 
-fn start_recording() -> Result<StreamHandle> {
-    let host = cpal::default_host();
-    let device = host
-        .default_input_device()
-        .context("no audio input device available")?;
+fn start_recording(name_substring: &str) -> Result<StreamHandle> {
+    let device = find_input_device(name_substring).with_context(|| {
+        if name_substring.is_empty() {
+            "no audio input device available".to_string()
+        } else {
+            format!("no audio input device matching '{name_substring}' found")
+        }
+    })?;
 
     let supported = device
         .default_input_config()
@@ -91,10 +94,50 @@ fn finish_recording(handle: StreamHandle) -> Vec<f32> {
     }
 }
 
+/// Find an input device whose name contains `name_substring` (case-insensitive).
+/// If `name_substring` is empty, returns the host's default input device.
+pub fn find_input_device(name_substring: &str) -> Option<cpal::Device> {
+    let host = cpal::default_host();
+    if name_substring.is_empty() {
+        return host.default_input_device();
+    }
+    let needle = name_substring.to_lowercase();
+    host.input_devices().ok()?.find(|d| {
+        d.name()
+            .map(|n| n.to_lowercase().contains(&needle))
+            .unwrap_or(false)
+    })
+}
+
+/// Block until an input device matching `name_substring` is available, polling at `poll_interval`.
+/// Empty substring means "any default input device". Prints a one-time waiting message and a
+/// "microphone detected" message once one appears. No-op if a match is already present.
+pub fn wait_for_input_device(name_substring: &str, poll_interval: Duration) {
+    if find_input_device(name_substring).is_some() {
+        return;
+    }
+    if name_substring.is_empty() {
+        eprintln!("[stt-typer] waiting for microphone...");
+    } else {
+        eprintln!("[stt-typer] waiting for microphone matching '{name_substring}'...");
+    }
+    loop {
+        std::thread::sleep(poll_interval);
+        if find_input_device(name_substring).is_some() {
+            eprintln!("[stt-typer] microphone detected");
+            return;
+        }
+    }
+}
+
 /// Record audio until `stop` is set to true, or `max_duration` elapses.
 /// Returns 16kHz mono f32 samples suitable for Whisper.
-pub fn record_until_stopped(stop: Arc<AtomicBool>, max_duration: Duration) -> Result<Vec<f32>> {
-    let handle = start_recording()?;
+pub fn record_until_stopped(
+    name_substring: &str,
+    stop: Arc<AtomicBool>,
+    max_duration: Duration,
+) -> Result<Vec<f32>> {
+    let handle = start_recording(name_substring)?;
     let start = Instant::now();
 
     loop {

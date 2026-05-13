@@ -28,6 +28,12 @@ struct Args {
     /// Path to Whisper model file (default: ~/.local/share/stt-mcp/ggml-base.bin or WHISPER_MODEL_PATH)
     #[arg(short = 'M', long, env = "WHISPER_MODEL_PATH")]
     model: Option<PathBuf>,
+
+    /// Substring of the input device name to wait for and record from (case-insensitive).
+    /// e.g. `--device ACG2502` waits for that USB device to appear before recording.
+    /// Without this flag, uses the system default input device with no waiting.
+    #[arg(short = 'd', long)]
+    device: Option<String>,
 }
 
 fn dirs_path() -> PathBuf {
@@ -196,6 +202,9 @@ fn main() -> Result<()> {
 
     let max_duration = Duration::from_secs(args.max_duration as u64);
     let lang = args.language;
+    let device_match = args.device.unwrap_or_default();
+
+    audio::wait_for_input_device(&device_match, Duration::from_secs(2));
 
     eprintln!("[stt-typer] ready — hold right CTRL to speak, release to stop ({lang}, max {}s)",
              args.max_duration);
@@ -219,6 +228,8 @@ fn main() -> Result<()> {
             }
         }
 
+        audio::wait_for_input_device(&device_match, Duration::from_secs(2));
+
         eprintln!("[stt-typer] recording... (release right CTRL to stop)");
         play_beep();
 
@@ -235,7 +246,7 @@ fn main() -> Result<()> {
             (rel_devs, result)
         });
 
-        let samples = match audio::record_until_stopped(stop, max_duration) {
+        let samples = match audio::record_until_stopped(&device_match, stop, max_duration) {
             Ok(s) => s,
             Err(e) => {
                 eprintln!("[stt-typer] recording failed: {e}");
