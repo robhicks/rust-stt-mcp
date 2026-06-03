@@ -17,9 +17,6 @@ export GEMINI_API_KEY=your-key-here
 
 # Run
 target/release/stt-typer
-
-# Container build
-podman build -f Containerfile -t stt-typer .
 ```
 
 There are no tests in this project currently.
