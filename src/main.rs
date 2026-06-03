@@ -1,6 +1,7 @@
 mod audio;
 mod keyboard;
 mod transcribe;
+mod wav;
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
