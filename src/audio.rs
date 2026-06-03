@@ -131,7 +131,7 @@ pub fn wait_for_input_device(name_substring: &str, poll_interval: Duration) {
 }
 
 /// Record audio until `stop` is set to true, or `max_duration` elapses.
-/// Returns 16kHz mono f32 samples suitable for Whisper.
+/// Returns 16kHz mono f32 samples suitable for transcription.
 pub fn record_until_stopped(
     name_substring: &str,
     stop: Arc<AtomicBool>,

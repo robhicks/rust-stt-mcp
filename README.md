@@ -1,6 +1,6 @@
 # stt-typer
 
-A push-to-talk voice typing CLI for Linux. Hold **right CTRL** to speak, release to transcribe and type the result into the active window using [ydotool](https://github.com/ReimuNotMoe/ydotool). Transcription is powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp) running locally.
+A push-to-talk voice typing CLI for Linux. Hold **right CTRL** to speak, release to transcribe and type the result into the active window using [ydotool](https://github.com/ReimuNotMoe/ydotool). Transcription is powered by Google's [Gemini API](https://ai.google.dev/gemini-api/docs).
 
 ## Prerequisites
 
@@ -8,7 +8,7 @@ Fedora 43 (or similar) with a working microphone. Install the build and runtime 
 
 ```bash
 # Build dependencies
-sudo dnf install alsa-lib-devel clang-devel cmake gcc-c++
+sudo dnf install alsa-lib-devel gcc
 
 # Runtime dependency — virtual keyboard for typing output
 sudo dnf install ydotool
@@ -28,17 +28,17 @@ You also need a Rust toolchain. If you don't have one:
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 ```
 
-## Download the Whisper model
+## Set your Gemini API key
 
-stt-typer uses Whisper's `base` model by default. Download it:
+stt-typer transcribes audio with the Gemini API. Create an API key in
+[Google AI Studio](https://aistudio.google.com/apikey) and export it:
 
 ```bash
-mkdir -p ~/.local/share/stt-mcp
-curl -fSL -o ~/.local/share/stt-mcp/ggml-base.bin \
-  https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin
+export GEMINI_API_KEY=your-key-here
 ```
 
-You can use a different model file with the `--model` flag or `WHISPER_MODEL_PATH` environment variable.
+Each utterance's audio is uploaded to the Gemini API for transcription, so a
+network connection is required.
 
 ## Build
 
@@ -60,13 +60,54 @@ Hold **right CTRL** to speak. A beep signals that recording has started. Release
 
 ```
 -m, --max-duration <SECS>   Maximum seconds to record (default: 30)
--l, --language <LANG>       Language hint for Whisper (default: "en")
--M, --model <PATH>          Path to Whisper model file [env: WHISPER_MODEL_PATH]
+-l, --language <LANG>       Language hint passed to Gemini (default: "en")
+-M, --model <NAME>          Gemini model to use (default: "gemini-3.5-flash")
+-d, --device <SUBSTR>       Input device name substring to record from
 ```
 
 ### Example
 
 ```bash
-# Use the large model and set Spanish as the language
-target/release/stt-typer --model ~/models/ggml-large.bin --language es
+# Use a preview model and set Spanish as the language
+target/release/stt-typer --model gemini-3-flash-preview --language es
 ```
+
+## Running as a systemd user service
+
+stt-typer runs as *you* — it needs your input devices, audio device, and the
+ydotool socket — so deploy it as a **user** service, not a system one.
+
+Put your key in an env file readable only by you:
+
+```bash
+mkdir -p ~/.config/stt-typer
+install -m 600 /dev/null ~/.config/stt-typer/env
+printf 'GEMINI_API_KEY=your-key-here\n' >> ~/.config/stt-typer/env
+```
+
+Create `~/.config/systemd/user/stt-typer.service`:
+
+```ini
+[Unit]
+Description=Push-to-talk voice typing
+After=graphical-session.target
+
+[Service]
+EnvironmentFile=%h/.config/stt-typer/env
+ExecStart=%h/.local/bin/stt-typer
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+Enable and follow it:
+
+```bash
+systemctl --user daemon-reload
+systemctl --user enable --now stt-typer.service
+journalctl --user -u stt-typer -f
+```
+
+Adjust `ExecStart` to wherever you installed the binary. The key stays in the
+0600 env file, never in the unit itself (which `systemctl show` would expose).

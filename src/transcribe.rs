@@ -18,8 +18,7 @@ pub struct GeminiClient {
     agent: Agent,
 }
 
-/// Build a Gemini client. Replaces the old Whisper model loader — there is no
-/// model file to load, just an HTTP agent to configure.
+/// Build a Gemini client. No model file to load, just an HTTP agent to configure.
 pub fn create_context(api_key: String, model: String) -> Result<GeminiClient> {
     let config = Agent::config_builder()
         .timeout_global(Some(Duration::from_secs(30)))
@@ -85,8 +84,7 @@ struct RespPart {
     text: Option<String>,
 }
 
-/// Transcribe audio via the Gemini API. Same call shape as the old Whisper
-/// function: takes the client, 16 kHz mono `f32` samples, and a language hint.
+/// Transcribe audio via the Gemini API. Takes the client, 16 kHz mono `f32` samples, and a language hint.
 pub fn transcribe_with_context(
     client: &GeminiClient,
     samples: &[f32],
