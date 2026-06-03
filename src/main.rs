@@ -7,13 +7,10 @@ use anyhow::{Context, Result, bail};
 use clap::Parser;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::SampleFormat;
-use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-const DEFAULT_MODEL_PATH: &str = ".local/share/stt-mcp/ggml-base.bin";
 
 #[derive(Parser)]
 #[command(name = "stt-typer", about = "Hold right CTRL to speak, release to transcribe and type into the active window")]
@@ -22,25 +19,19 @@ struct Args {
     #[arg(short, long, default_value_t = 30)]
     max_duration: u32,
 
-    /// Language hint for Whisper (default: "en")
+    /// Language hint passed to Gemini (default: "en")
     #[arg(short, long, default_value = "en")]
     language: String,
 
-    /// Path to Whisper model file (default: ~/.local/share/stt-mcp/ggml-base.bin or WHISPER_MODEL_PATH)
-    #[arg(short = 'M', long, env = "WHISPER_MODEL_PATH")]
-    model: Option<PathBuf>,
+    /// Gemini model to use for transcription
+    #[arg(short = 'M', long, default_value = "gemini-3.5-flash")]
+    model: String,
 
     /// Substring of the input device name to wait for and record from (case-insensitive).
     /// e.g. `--device ACG2502` waits for that USB device to appear before recording.
     /// Without this flag, uses the system default input device with no waiting.
     #[arg(short = 'd', long)]
     device: Option<String>,
-}
-
-fn dirs_path() -> PathBuf {
-    std::env::var("HOME")
-        .map(PathBuf::from)
-        .unwrap_or_else(|_| PathBuf::from("."))
 }
 
 /// Play a short beep (800Hz for 200ms) to signal recording start.
@@ -167,17 +158,19 @@ fn detect_ydotool_socket() {
 fn main() -> Result<()> {
     let args = Args::parse();
 
-    let model_path = args
-        .model
-        .unwrap_or_else(|| dirs_path().join(DEFAULT_MODEL_PATH));
+    let api_key = std::env::var("GEMINI_API_KEY").map_err(|_| {
+        anyhow::anyhow!(
+            "GEMINI_API_KEY is not set — export your Google AI Studio API key:\n  \
+             export GEMINI_API_KEY=your-key-here"
+        )
+    })?;
 
     // Preflight checks
     detect_ydotool_socket();
 
-    eprintln!("[stt-typer] loading whisper model from {}", model_path.display());
-    let ctx = transcribe::create_context(&model_path)
-        .context("failed to load whisper model")?;
-    eprintln!("[stt-typer] model loaded");
+    eprintln!("[stt-typer] using Gemini model {}", args.model);
+    let ctx = transcribe::create_context(api_key, args.model.clone())
+        .context("failed to initialize Gemini client")?;
 
     // Check ydotool is available
     let ydotool_check = Command::new("ydotool")
