@@ -26,7 +26,7 @@ There are no tests in this project currently.
 
 ## Architecture
 
-Four source files, each with a single responsibility:
+Five source files, each with a single responsibility:
 
 - **`src/main.rs`** — CLI entry point using `clap`. Parses args, builds the Gemini client once, then loops: wait for right CTRL press, record audio until release, transcribe, type result via `ydotool`. Also handles ydotool socket detection and plays a beep on recording start.
 
